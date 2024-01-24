@@ -5,6 +5,7 @@ import json
 project_id = 'titanium-gantry-411715'
 dataset_id = 'blablacar_project'
 table_id = 'conductor'
+subscription_name = 'driver-sub'
 
 # Configura el cliente BigQuery
 client_bq = bigquery.Client(project=project_id)
@@ -35,13 +36,11 @@ except Exception as e:
     print(f"Error al crear la tabla: {e}")
 
 # Configura el cliente de Pub/Sub y suscripción
-subscription_name = 'projects/titanium-gantry-411715/subscriptions/driver-sub'
 subscriber = pubsub_v1.SubscriberClient()
-subscription_path = subscriber.subscription_path(project_id, subscription_name)
 
-# Función para procesar mensajes de Pub/Sub
-def callback(message):
-    data = json.loads(message.data.decode("utf-8"))
+# Define la función de callback
+def callback(received_message):
+    data = json.loads(received_message.message.data.decode("utf-8"))
 
     # Extrae los campos del mensaje
     driver_info = data["Driver_information"]
@@ -57,17 +56,29 @@ def callback(message):
     else:
         print(f"Datos insertados correctamente en BigQuery: {rows_to_insert}")
 
-    # Marca el mensaje como procesado
-    message.ack()
+        # Marca el mensaje como procesado utilizando acknowledge
+        subscriber.acknowledge(subscription=subscription_path, ack_ids=[received_message.ack_id])
 
 # Configura la suscripción de Pub/Sub
-subscriber.subscribe(subscription_path, callback=callback)
+subscription_path = f"projects/{project_id}/subscriptions/{subscription_name}"
 
 print(f"Escuchando mensajes de Pub/Sub en la suscripción {subscription_path}...")
 try:
-    # Inicia la suscripción y espera mensajes
-    future = subscriber.open(callback=callback)
-    future.result()
+    while True:
+        # Espera mensajes
+        response = subscriber.pull(
+            subscription=subscription_path,
+            max_messages=1,
+            timeout=30
+        )
+
+        for received_message in response.received_messages:
+            callback(received_message)
+
+            # Marca el mensaje como procesado utilizando acknowledge
+            subscriber.acknowledge(subscription_path, [received_message.ack_id])
 except KeyboardInterrupt:
     # Detiene la suscripción al recibir una interrupción de teclado
+    pass
+finally:
     subscriber.close()
