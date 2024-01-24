@@ -65,9 +65,9 @@ subscriber.subscribe(subscription_path, callback=callback)
 
 print(f"Escuchando mensajes de Pub/Sub en la suscripción {subscription_path}...")
 try:
-    # Mantiene el script en ejecución para escuchar mensajes de Pub/Sub
-    subscriber.start()
-    subscriber.wait_for_termination()
+    # Inicia la suscripción y espera mensajes
+    future = subscriber.open(callback=callback)
+    future.result()
 except KeyboardInterrupt:
     # Detiene la suscripción al recibir una interrupción de teclado
-    subscriber.stop()
+    subscriber.close()
