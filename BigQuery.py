@@ -12,8 +12,12 @@ client_bq = bigquery.Client(project=project_id)
 # Verifica si el conjunto de datos ya existe, si no, créalo
 dataset_ref = client_bq.dataset(dataset_id)
 dataset = bigquery.Dataset(dataset_ref)
-if not client_bq.get_dataset(dataset):
+
+try:
     dataset = client_bq.create_dataset(dataset)
+    print(f"Conjunto de datos {dataset.dataset_id} creado correctamente.")
+except Exception as e:
+    print(f"Error al crear el conjunto de datos: {e}")
 
 # Verifica si la tabla ya existe, si no, créala con los esquemas especificados
 table_ref = dataset_ref.table(table_id)
@@ -23,8 +27,12 @@ schema = [
     bigquery.SchemaField("Route_information", "STRING", mode="REQUIRED"),
 ]
 table = bigquery.Table(table_ref, schema=schema)
-if not client_bq.get_table(table):
+
+try:
     table = client_bq.create_table(table)
+    print(f"Tabla {table.table_id} creada correctamente.")
+except Exception as e:
+    print(f"Error al crear la tabla: {e}")
 
 # Configura el cliente de Pub/Sub y suscripción
 subscription_name = 'projects/titanium-gantry-411715/subscriptions/driver-sub'
