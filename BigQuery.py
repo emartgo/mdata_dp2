@@ -27,7 +27,7 @@ if not client_bq.get_table(table):
     table = client_bq.create_table(table)
 
 # Configura el cliente de Pub/Sub y suscripción
-subscription_name = 'projects/fresh-tape-399911/subscriptions/blablacar_subscription'
+subscription_name = 'projects/titanium-gantry-411715/subscriptions/driver-sub'
 subscriber = pubsub_v1.SubscriberClient()
 subscription_path = subscriber.subscription_path(project_id, subscription_name)
 
