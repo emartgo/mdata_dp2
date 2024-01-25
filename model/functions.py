@@ -11,7 +11,7 @@ def get_geojson(file_dir):
     return geojson_file
 
 
-def obtener_ruta_google_maps(origen, destino, clave_api):
+def get_route_gmaps(origen, destino, clave_api):
     # Inicializa el cliente de Google Maps con tu clave de API
     gmaps = googlemaps.Client(key=clave_api)
 
