@@ -3,6 +3,9 @@ import json
 from apache_beam.options.pipeline_options import PipelineOptions
 from functions import *
 import math as m
+from google.cloud import bigquery
+from google.cloud.exceptions import Conflict
+
 
 ROOT = "data/"
 AVG_CAR_SPEED = 13.89 # m/s
@@ -57,6 +60,38 @@ def get_estimated_time(data):
     time = round(data/AVG_CAR_SPEED,3) # in seconds
     time_minutes = round(time/60,3) # in minutes
     return time_minutes
+# Get the right format of the json with all the driver route information
+def transform_json(data):
+    driver_id = data["driver"]["id"]
+    point_coordinates = get_points_coordinates(data)
+    coordinates = get_coordinates(data)
+    distances = get_coords_to_meters(coordinates)
+    total_distance = get_total_distance(distances)
+    estimated_time = get_estimated_time(total_distance)
+    
+    transformed_coordinates = [{"latitude": lat, "longitude": lon} for lat, lon in coordinates]
+    
+    structure = {
+        "driver": {"driver_id": driver_id},
+        # "route": {
+        #     "points": {
+        #         "point_a": {
+        #             "coordinates": point_coordinates[0]
+        #         },
+        #         "point_b": {
+        #             "coordinates": point_coordinates[1]
+        #         }
+        #     },
+        #     "coordinates": transformed_coordinates,
+        # },
+        "route_info": {
+            # "distances": distances,
+            "total_distance": total_distance,
+            "estimated_time": estimated_time
+        }
+    }
+    
+    return structure
 
 """
 After the driver has uploaded all the route information in the APP, we receive a GeoJSON file with the route. Then, we extract all
@@ -67,6 +102,53 @@ The list is sorted by the estimated time of the route. The user can choose the d
 In this first part, we do not manage times, so we understand that they do not have conflicts. A driver upload a route and he 
 wait until a pedestrian choose him.
 """
+
+"""project_id = 'mdata-dp2'
+dataset_id = 'blablacar'
+table_id = 'driver_route_information'
+
+schema = [
+    bigquery.SchemaField("driver", "RECORD", mode="NULLABLE", fields=[
+        bigquery.SchemaField("driver_id", "STRING", mode="NULLABLE"),
+    ]),
+    # bigquery.SchemaField("route", "RECORD", mode="NULLABLE", fields=[
+    #     bigquery.SchemaField("points", "RECORD", mode="NULLABLE", fields=[
+    #         bigquery.SchemaField("point_a", "RECORD", mode="NULLABLE", fields=[
+    #             bigquery.SchemaField("coordinates", "FLOAT", mode="REPEATED"),
+    #         ]),
+    #         bigquery.SchemaField("point_b", "RECORD", mode="NULLABLE", fields=[
+    #             bigquery.SchemaField("coordinates", "FLOAT", mode="REPEATED"),
+    #         ]),
+    #     ]),
+    #     # Esta es la parte cambiada para reflejar una lista de pares de coordenadas
+    #     bigquery.SchemaField("coordinates", "RECORD", mode="REPEATED", fields=[
+    #         bigquery.SchemaField("latitude", "FLOAT", mode="NULLABLE"),
+    #         bigquery.SchemaField("longitude", "FLOAT", mode="NULLABLE"),
+    #     ]),
+    # ]),
+    bigquery.SchemaField("route_info", "RECORD", mode="NULLABLE", fields=[
+        # bigquery.SchemaField("distances", "FLOAT", mode="REPEATED"),
+        bigquery.SchemaField("total_distance", "FLOAT", mode="NULLABLE"),
+        bigquery.SchemaField("estimated_time", "FLOAT", mode="NULLABLE"),
+    ]),
+]
+
+
+# Configura el cliente BigQuery
+client_bq = bigquery.Client(project=project_id)
+dataset_ref = client_bq.dataset(dataset_id)
+dataset = bigquery.Dataset(dataset_ref)
+# Verifica si la tabla ya existe, si no, créala con los esquemas especificados
+table_ref = dataset_ref.table(table_id)
+table = bigquery.Table(table_ref, schema=schema)
+
+try:
+    table = client_bq.create_table(table)
+    print(f"Tabla {table.table_id} creada correctamente.")
+except Conflict as e:
+    print(f"La tabla {table.table_id} ya existe.")
+except Exception as e:
+    print(f"Error al crear la tabla: {e}")"""
 
 # Get the information about the routes of the cars
 for file in get_geojson(ROOT+"car"): # Change to walker to get the walker route
@@ -79,9 +161,13 @@ for file in get_geojson(ROOT+"car"): # Change to walker to get the walker route
             p 
             | 'Create' >> beam.Create([file])
             | 'ReadGeoJSON' >> beam.Map(read_geojson)
-            | 'GetCoords' >> beam.Map(get_coordinates)
-            | 'GetDistances' >> beam.Map(get_coords_to_meters)
-            | 'GetTotalDistance' >> beam.Map(get_total_distance)
-            | 'GetEstimatedTime' >> beam.Map(get_estimated_time)
+            | 'GetJSON' >> beam.Map(transform_json)
             | 'Print' >> beam.Map(print)
+            | "WriteToBigQuery" >> beam.io.WriteToBigQuery(   
+                table="mdata-dp2:blablacar.driver_route_information",
+                schema="driver:RECORD, route_info:RECORD",
+                create_disposition=beam.io.BigQueryDisposition.CREATE_NEVER,
+                write_disposition=beam.io.BigQueryDisposition.WRITE_APPEND,
+                method=beam.io.WriteToBigQuery.Method.STREAMING_INSERTS
+                )
         )
