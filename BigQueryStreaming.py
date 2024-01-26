@@ -5,7 +5,7 @@ import json
 project_id = 'titanium-gantry-411715'
 dataset_id = 'blablacar_project'
 table_id = 'conductor'
-subscription_name = 'driver-sub'
+subscription_name = 'usuario-sub'
 
 # Configura el cliente BigQuery
 client_bq = bigquery.Client(project=project_id)
