@@ -1,4 +1,5 @@
-{
+{   
+    "driver": {"id": "1"},
     "type": "FeatureCollection",
     "name": "Indicaciones de Aqua Multiespacio, Calle de Menorca, Valencia a Bioparc, Avenida Pío Baroja, Valencia",
     "crs": {
