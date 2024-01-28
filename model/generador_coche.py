@@ -8,8 +8,8 @@ from google.cloud import pubsub_v1
 
 AVG_CAR_SPEED = 13.89
 
-TOPIC_NAME = "usuario"
-SUBSCRIPTION_NAME = "usuario-sub"
+TOPIC_NAME = "driver"
+SUBSCRIPTION_NAME = "driver-sub"
 
 def create_topic_subscription():
     # Crear un cliente de Pub/Sub
@@ -101,7 +101,7 @@ def get_estimated_time(data):
     return time_minutes
 
 def transform_json(data):
-    driver_id = data['driver']['id']
+    id = data['driver']['id']
     point_coordinates = get_points_coordinates(data)
     coordinates = get_coordinates(data)
     distances = get_coords_to_meters(coordinates)
@@ -109,21 +109,18 @@ def transform_json(data):
     estimated_time = get_estimated_time(total_distance)
     
     structure = {
-        "driver": {"driver_id": driver_id},
+        "id": {"id": id},
         "route": {
             "points": {
                 "point_a": point_coordinates[0],
                 "point_b": point_coordinates[1]
-            # "coordinates": transformed_coordinates,
             },
-        "route_info": {
-            # "distances": distances,
-            "total_distance": total_distance,
-            "estimated_time": estimated_time
+            "route_info": {
+                "total_distance": total_distance,
+                "estimated_time": estimated_time
             }
-        }
+        },
     }
-    
     return structure
 
 def calculate_time(coord1, coord2, speed):
