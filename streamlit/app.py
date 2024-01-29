@@ -4,7 +4,7 @@ from streamlit_folium import folium_static
 import json
 
 # Cargar el JSON con las coordenadas
-with open("/Users/pablomartinomdedeu/Desktop/EDEM_Master/GitHub/MDATAPROJECT2/mdata_dp2/streamlit/01_coche.geojson", "r") as file:
+with open("01_coche.geojson", "r") as file:
     data = json.load(file)
 
 # Obtener las coordenadas
@@ -23,8 +23,3 @@ st.markdown('Mapa que muestra la ruta del viaje.')
 
 # Mostrar el mapa de folium usando folium_static
 folium_static(m)
-
-
-
-
-
