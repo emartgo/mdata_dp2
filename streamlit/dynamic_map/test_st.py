@@ -7,24 +7,28 @@ import json
 
 st.title('Rayo Mcqueen vs Wally')
 
-with open("01_coche.geojson", "r") as file:
+with open("/Users/emart/Documents/GitHub/mdata_dp2/streamlit/01_coche.geojson", "r") as file:
     data = json.load(file)
+with open("/Users/emart/Documents/GitHub/mdata_dp2/streamlit/02_coche.geojson", "r") as file_02:
+    data_02 = json.load(file_02)
 
 # Obtener las coordenadas
 coordinates = data['features'][0]['geometry']['coordinates']
-print(coordinates)
+coordinates_02 = data_02['features'][0]['geometry']['coordinates']
 
 # Inicializar datos
 df = pd.DataFrame({
     'lat': [data['features'][1]['geometry']['coordinates'][1]],
     'lon': [data['features'][1]['geometry']['coordinates'][0]]
 })
-
-print(df)
+df_02 = pd.DataFrame({
+    'lat': [data_02['features'][1]['geometry']['coordinates'][1]],
+    'lon': [data_02['features'][1]['geometry']['coordinates'][0]]
+})
 
 # Crear un mapa más grande con un estilo de mapa más simple
 fig = px.line_mapbox(df, lat='lat', lon='lon',
-                     zoom=12, height=900,  # Tamaño más grande
+                     zoom=12, height=700,  # Tamaño más grande
                      mapbox_style="carto-positron")  # Estilo más simple
 map_container = st.plotly_chart(fig, use_container_width=True)
 # Simular la adición de nuevos puntos a la ruta
@@ -38,6 +42,6 @@ for coord in coordinates:
     time.sleep(0.01)
     # Actualizar gráfico
     fig = px.line_mapbox(df, lat='lat', lon='lon',
-                         zoom=12, height=900,  # Tamaño más grande
+                         zoom=12, height=700,  # Tamaño más grande
                          mapbox_style="carto-positron")  # Estilo más simple
     map_container.plotly_chart(fig, use_container_width=True)
