@@ -73,17 +73,17 @@ def transform_json(data):
     
     structure = {
         "driver": {"driver_id": driver_id},
-        # "route": {
-        #     "points": {
-        #         "point_a": {
-        #             "coordinates": point_coordinates[0]
-        #         },
-        #         "point_b": {
-        #             "coordinates": point_coordinates[1]
-        #         }
-        #     },
-        #     "coordinates": transformed_coordinates,
-        # },
+        "route": {
+            "points": {
+                "point_a": {
+                    "coordinates": point_coordinates[0]
+                },
+                "point_b": {
+                    "coordinates": point_coordinates[1]
+                }
+            },
+            # "coordinates": transformed_coordinates,
+        },
         "route_info": {
             # "distances": distances,
             "total_distance": total_distance,
