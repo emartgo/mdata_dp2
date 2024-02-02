@@ -1,4 +1,5 @@
 {
+"walker": {"id": "3"},
 "type": "FeatureCollection",
 "name": "Indicaciones de corte ingles, Calle de Menorca, Valencia a Centro Comercial Nuevo Centro, Avenida Pío XII, Valencia",
 "crs": { "type": "name", "properties": { "name": "urn:ogc:def:crs:OGC:1.3:CRS84" } },
