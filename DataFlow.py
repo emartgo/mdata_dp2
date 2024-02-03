@@ -11,7 +11,6 @@ class ProcessMessages(DoFn):
     def __init__(self, last_values):
         self.last_values = last_values
 
-
     def process(self, element):
         # Parsear el mensaje JSON
         message = json.loads(element.data.decode('utf-8'))
@@ -47,7 +46,7 @@ def haversine(coord1, coord2):
 
 
 def calculate_distance(element, last_values):
-    entity_id = element['Id']
+    entity_id = element['driver_id']
     coordinates = element['coordenada_actual']
     point_b = element.get('point_b', None)
 
@@ -64,12 +63,13 @@ def calculate_distance(element, last_values):
                 if pedestrian_point_b is not None and pedestrian_point_b == point_b:
                     distance_to_pedestrian = haversine(coordinates, pedestrian_coords)
 
-                    if distance_to_pedestrian < 0.05:  # 50 metros en kilómetros
+                    if distance_to_pedestrian < 50:  # 50 metros en metros
                         yield {
                             'driver_id': entity_id,
                             'pedestrian_id': pedestrian_id,
                             'distance_to_point_b': distance_to_point_b,
                         }
+
 
 class ProcessDriverMessages(DoFn):
     def __init__(self, last_values):
@@ -139,13 +139,13 @@ def run(argv=None):
     match_schema = [
         bigquery.SchemaField("pedestrian_id", "INTEGER", mode="REQUIRED"),
         bigquery.SchemaField("driver_id", "INTEGER", mode="REQUIRED"),
-        bigquery.SchemaField("distance", "FLOAT", mode="REQUIRED"), 
+        bigquery.SchemaField("distance", "FLOAT", mode="REQUIRED"),
     ]
 
     driver_schema_dict = {field.name: field.field_type for field in driver_schema}
     pedestrian_schema_dict = {field.name: field.field_type for field in pedestrian_schema}
     match_schema_dict = {field.name: field.field_type for field in match_schema}
-    
+
     # Verificación y creación de la tabla de conductores
     driver_tables = list(client.list_tables(dataset_ref))
     if table_ref_driver not in [table.table_id for table in driver_tables]:
@@ -192,7 +192,7 @@ def run(argv=None):
         p
         | 'ReadPedestrianMessages' >> io.ReadFromPubSub(subscription=pedestrian_subscription_path)
         | 'ParsePedestrianMessages' >> Map(lambda x: json.loads(x.decode('utf-8')))
-        | 'ProcessPedestrianMessages' >> DoFn(ProcessMessages(last_pedestrian_values))
+        | 'ProcessPedestrianMessages' >> ParDo(ProcessMessages(last_pedestrian_values))
         | 'WritePedestrianToBigQuery' >> io.WriteToBigQuery(
             table=table_ref_pedestrian,
             schema=pedestrian_schema_dict,  # Utiliza el diccionario en lugar de la lista
@@ -203,7 +203,7 @@ def run(argv=None):
     matching_results = (
         (pedestrian_messages, driver_messages)
         | 'Flatten' >> Flatten()
-        | 'CalculateDistance' >> io.FlatMap(calculate_distance, last_values=last_driver_values)
+        | 'CalculateDistance' >> Map(calculate_distance, last_values=last_driver_values)
         | 'WriteMatchToBigQuery' >> io.WriteToBigQuery(
             table=table_ref_match,
             schema=match_schema_dict,  # Utiliza el diccionario en lugar de la lista
