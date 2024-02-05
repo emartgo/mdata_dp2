@@ -5,9 +5,9 @@ import math as m
 import geojson
 from google.cloud import pubsub_v1
 
-AVG_CAR_SPEED = 13.89
-TOPIC_NAME = "pedestrian"
-SUBSCRIPTION_NAME = "pedestrian-sub"
+AVG_CAR_SPEED = 1.38
+TOPIC_NAME = "walker"
+SUBSCRIPTION_NAME = "walker-sub"
 
 def create_topic_subscription():
     publisher = pubsub_v1.PublisherClient()
@@ -73,7 +73,7 @@ def transform_json(data, current_coordinates):
     estimated_time = round(total_distance / AVG_CAR_SPEED / 60, 3)
 
     return {
-        "id": {"id": id},
+        "walker": {"id": id},
         "route": {
             "points": {
                 "point_a": point_coordinates[0],
@@ -87,7 +87,7 @@ def transform_json(data, current_coordinates):
         "coordenada_actual": current_coordinates
     }
 
-geojson_path = "./model/data/walker/"
+geojson_path = "./model/data/car/"
 geojson_list = get_geojson(geojson_path)
 
 # Crear el tema y la suscripción si es necesario
