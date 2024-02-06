@@ -1,63 +1,100 @@
-import apache_beam as beam
+from apache_beam import Pipeline, DoFn, io, Flatten, Map, ParDo
 from apache_beam.options.pipeline_options import PipelineOptions
+import google.api_core.exceptions
 from google.cloud import bigquery
 from google.cloud import pubsub_v1
 import json
 import math as m
 
-class ProcessMessages(beam.DoFn):
+
+class ProcessMessages(DoFn):
     def __init__(self, last_values):
         self.last_values = last_values
 
     def process(self, element):
+        # Parsear el mensaje JSON
         message = json.loads(element.data.decode('utf-8'))
         entity_id = message['Id']
         coordinates = message['coordenada_actual']
 
         if entity_id in self.last_values:
-            # Update existing entry
+            # Actualizar la entrada existente
             self.last_values[entity_id] = coordinates
         else:
-            # Add new entry
+            # Agregar una nueva entrada
             self.last_values[entity_id] = coordinates
 
         yield message
 
+
 def haversine(coord1, coord2):
-    # Radius of the Earth in km
+    # Radio de la Tierra en km
     R = 6371.0
     lon1, lat1 = coord1
     lon2, lat2 = coord2
-    # Convert coordinates to radians
+    # Convertir coordenadas a radianes
     phi1, phi2 = m.radians(lat1), m.radians(lat2)
     delta_phi = m.radians(lat2 - lat1)
     delta_lambda = m.radians(lon2 - lon1)
-    # Haversine formula
+    # Fórmula de Haversine
     a = m.sin(delta_phi / 2)**2 + m.cos(phi1) * m.cos(phi2) * m.sin(delta_lambda / 2)**2
     c = 2 * m.atan2(m.sqrt(a), m.sqrt(1 - a))
-    # Distance in meters
+    # Distancia en metros
     distance = R * c * 1000
 
     return distance
 
+
 def calculate_distance(element, last_values):
-    entity_id = element['Id']
+    entity_id = element['driver_id']
     coordinates = element['coordenada_actual']
-    
-    if entity_id.startswith('driver'):
-        # Check for pedestrians within 50 meters
-        for pedestrian_id, pedestrian_coords in last_values.items():
+    point_b = element.get('point_b', None)
+
+    if entity_id.startswith('driver') and point_b is not None:
+        # Calcular distancia entre coordenada_actual de driver y point_b de driver
+        distance_to_point_b = haversine(coordinates, point_b)
+
+        # Verificar peatones dentro de 50 metros con el mismo valor de point_b
+        for pedestrian_id, pedestrian_data in last_values.items():
             if pedestrian_id.startswith('pedestrian'):
-                distance = haversine(coordinates, pedestrian_coords)
-                if distance < 0.05:  # 50 meters in kilometers
-                    yield {
-                        'driver_id': entity_id,
-                        'pedestrian_id': pedestrian_id
-                    }
+                pedestrian_coords = pedestrian_data['coordenada_actual']
+                pedestrian_point_b = pedestrian_data.get('point_b', None)
+
+                if pedestrian_point_b is not None and pedestrian_point_b == point_b:
+                    distance_to_pedestrian = haversine(coordinates, pedestrian_coords)
+
+                    if distance_to_pedestrian < 50:  # 50 metros en metros
+                        yield {
+                            'driver_id': entity_id,
+                            'pedestrian_id': pedestrian_id,
+                            'distance_to_point_b': distance_to_point_b,
+                        }
+
+
+class ProcessDriverMessages(DoFn):
+    def __init__(self, last_values):
+        self.last_values = last_values
+
+    def process(self, element):
+        # Parsear el mensaje JSON
+        message = json.loads(element.data.decode('utf-8'))
+        entity_id = message['Id']
+        coordinates = message['coordenada_actual']
+
+        if entity_id in self.last_values:
+            # Actualizar la entrada existente
+            self.last_values[entity_id] = coordinates
+        else:
+            # Agregar una nueva entrada
+            self.last_values[entity_id] = coordinates
+
+        yield message
+
 
 def run(argv=None):
+    # Configuración de las opciones del pipeline
     pipeline_options = PipelineOptions(argv)
-    p = beam.Pipeline(options=pipeline_options)
+    p = Pipeline(options=pipeline_options)
 
     project_id = 'titanium-gantry-411715'
     dataset_id = 'blablacar_project'
@@ -74,11 +111,11 @@ def run(argv=None):
     client = bigquery.Client(project=project_id)
     dataset_ref = client.dataset(dataset_id)
     dataset = bigquery.Dataset(dataset_ref)
-    table_ref_driver = dataset_ref.table(driver_table_id)
-    table_ref_pedestrian = dataset_ref.table(pedestrian_table_id)
-    table_ref_match = dataset_ref.table(match_table_id)
+    table_ref_driver = f"{project_id}.{dataset_id}.{driver_table_id}"
+    table_ref_pedestrian = f"{project_id}.{dataset_id}.{pedestrian_table_id}"
+    table_ref_match = f"{project_id}.{dataset_id}.{match_table_id}"
 
-    if not client.dataset(dataset_ref).exists():
+    if not client.get_dataset(dataset_ref):
         client.create_dataset(dataset)
 
     driver_schema = [
@@ -102,16 +139,36 @@ def run(argv=None):
     match_schema = [
         bigquery.SchemaField("pedestrian_id", "INTEGER", mode="REQUIRED"),
         bigquery.SchemaField("driver_id", "INTEGER", mode="REQUIRED"),
+        bigquery.SchemaField("distance", "FLOAT", mode="REQUIRED"),
     ]
 
-    if not client.table(table_ref_driver).exists():
-        client.create_table(bigquery.Table(table_ref_driver, schema=driver_schema))
+    driver_schema_dict = {field.name: field.field_type for field in driver_schema}
+    pedestrian_schema_dict = {field.name: field.field_type for field in pedestrian_schema}
+    match_schema_dict = {field.name: field.field_type for field in match_schema}
 
-    if not client.table(table_ref_pedestrian).exists():
-        client.create_table(bigquery.Table(table_ref_pedestrian, schema=pedestrian_schema))
+    # Verificación y creación de la tabla de conductores
+    driver_tables = list(client.list_tables(dataset_ref))
+    if table_ref_driver not in [table.table_id for table in driver_tables]:
+        try:
+            client.create_table(bigquery.Table(table_ref_driver, schema=driver_schema))
+        except google.api_core.exceptions.Conflict:
+            print(f"La tabla {table_ref_driver} ya existe en BigQuery.")
 
-    if not client.table(table_ref_match).exists():
-        client.create_table(bigquery.Table(table_ref_match, schema=match_schema))
+    # Verificación y creación de la tabla de peatones
+    pedestrian_tables = list(client.list_tables(dataset_ref))
+    if table_ref_pedestrian not in [table.table_id for table in pedestrian_tables]:
+        try:
+            client.create_table(bigquery.Table(table_ref_pedestrian, schema=pedestrian_schema))
+        except google.api_core.exceptions.Conflict:
+            print(f"La tabla {table_ref_pedestrian} ya existe en BigQuery.")
+
+    # Verificación y creación de la tabla de coincidencias
+    match_tables = list(client.list_tables(dataset_ref))
+    if table_ref_match not in [table.table_id for table in match_tables]:
+        try:
+            client.create_table(bigquery.Table(table_ref_match, schema=match_schema))
+        except google.api_core.exceptions.Conflict:
+            print(f"La tabla {table_ref_match} ya existe en BigQuery.")
 
     # Configuración de Pub/Sub
     subscriber = pubsub_v1.SubscriberClient()
@@ -121,42 +178,43 @@ def run(argv=None):
     # Definición del pipeline
     driver_messages = (
         p
-        | 'ReadDriverMessages' >> beam.io.ReadFromPubSub(subscription=driver_subscription_path)
-        | 'ParseDriverMessages' >> beam.Map(lambda x: json.loads(x.decode('utf-8')))
-        | 'ProcessDriverMessages' >> beam.ParDo(ProcessMessages(last_driver_values))
-        | 'WriteDriverToBigQuery' >> beam.io.WriteToBigQuery(
+        | 'ReadDriverMessages' >> io.ReadFromPubSub(subscription=driver_subscription_path)
+        | 'ParseDriverMessages' >> Map(lambda x: json.loads(x.decode('utf-8')))
+        | 'ProcessDriverMessages' >> ParDo(ProcessDriverMessages(last_driver_values))
+        | 'WriteDriverToBigQuery' >> io.WriteToBigQuery(
             table=table_ref_driver,
-            schema=driver_schema,
-            write_disposition=beam.io.BigQueryDisposition.WRITE_APPEND
+            schema=driver_schema_dict,  # Utiliza el diccionario en lugar de la lista
+            write_disposition=io.BigQueryDisposition.WRITE_APPEND
         )
     )
 
     pedestrian_messages = (
         p
-        | 'ReadPedestrianMessages' >> beam.io.ReadFromPubSub(subscription=pedestrian_subscription_path)
-        | 'ParsePedestrianMessages' >> beam.Map(lambda x: json.loads(x.decode('utf-8')))
-        | 'ProcessPedestrianMessages' >> beam.ParDo(ProcessMessages(last_pedestrian_values))
-        | 'WritePedestrianToBigQuery' >> beam.io.WriteToBigQuery(
+        | 'ReadPedestrianMessages' >> io.ReadFromPubSub(subscription=pedestrian_subscription_path)
+        | 'ParsePedestrianMessages' >> Map(lambda x: json.loads(x.decode('utf-8')))
+        | 'ProcessPedestrianMessages' >> ParDo(ProcessMessages(last_pedestrian_values))
+        | 'WritePedestrianToBigQuery' >> io.WriteToBigQuery(
             table=table_ref_pedestrian,
-            schema=pedestrian_schema,
-            write_disposition=beam.io.BigQueryDisposition.WRITE_APPEND
+            schema=pedestrian_schema_dict,  # Utiliza el diccionario en lugar de la lista
+            write_disposition=io.BigQueryDisposition.WRITE_APPEND
         )
     )
 
     matching_results = (
         (pedestrian_messages, driver_messages)
-        | 'Flatten' >> beam.Flatten()
-        | 'CalculateDistance' >> beam.FlatMap(calculate_distance, last_values=last_driver_values)
-        | 'WriteMatchToBigQuery' >> beam.io.WriteToBigQuery(
+        | 'Flatten' >> Flatten()
+        | 'CalculateDistance' >> Map(calculate_distance, last_values=last_driver_values)
+        | 'WriteMatchToBigQuery' >> io.WriteToBigQuery(
             table=table_ref_match,
-            schema=match_schema,
-            write_disposition=beam.io.BigQueryDisposition.WRITE_APPEND
+            schema=match_schema_dict,  # Utiliza el diccionario en lugar de la lista
+            write_disposition=io.BigQueryDisposition.WRITE_APPEND
         )
     )
 
     # Ejecución del pipeline
     result = p.run()
     result.wait_until_finish()
+
 
 if __name__ == '__main__':
     run()

@@ -12,5 +12,6 @@ proto-plus==1.23.0
 apache-beam==2.51.0
 google-apitools==0.5.32
 google-cloud-bigquery==3.13.0
-geojson == 3.1.0
+geojson==3.1.0
+pandas==1.5.3
 plotly

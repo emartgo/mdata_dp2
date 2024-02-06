@@ -1,8 +1,8 @@
 import os
-import geojson
 import time
 import json
 import math as m
+import geojson
 from google.cloud import pubsub_v1
 
 AVG_CAR_SPEED = 1.39
@@ -65,6 +65,7 @@ def calculate_time(coord1, coord2, speed):
     return time_hours
 
 def transform_json(data, current_coordinates):
+
     id = data['walker']['id']
     point_coordinates = [data['features'][1]['geometry']['coordinates'], data['features'][2]['geometry']['coordinates']]
     coordinates = data['features'][0]['geometry']['coordinates']

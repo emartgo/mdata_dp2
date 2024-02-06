@@ -1,8 +1,8 @@
 import os
-import geojson
 import time
 import json
 import math as m
+import geojson
 from google.cloud import pubsub_v1
 
 AVG_CAR_SPEED = 13.89
@@ -105,5 +105,4 @@ while True:
             coordinates_array.pop(0)
 
             publish_message(current_json)
-
     time.sleep(1)
