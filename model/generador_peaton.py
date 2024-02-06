@@ -73,7 +73,7 @@ def transform_json(data, current_coordinates):
     estimated_time = round(total_distance / AVG_CAR_SPEED / 60, 3)
 
     return {
-        "id": {"id": id},
+        "walker": {"id": id},
         "route": {
             "points": {
                 "point_a": point_coordinates[0],
