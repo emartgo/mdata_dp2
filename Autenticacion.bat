@@ -1,4 +1,3 @@
-Set-ExecutionPolicy RemoteSigned
 gcloud init
 gcloud auth login
 gcloud auth application-default login

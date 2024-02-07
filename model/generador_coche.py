@@ -67,10 +67,6 @@ def calculate_time(coord1, coord2, speed):
 def transform_json(data, current_coordinates):
     id = data['driver']['id']
     point_coordinates = [data['features'][1]['geometry']['coordinates'], data['features'][2]['geometry']['coordinates']]
-    coordinates = data['features'][0]['geometry']['coordinates']
-    distances = [haversine(coordinates[i], coordinates[i+1]) for i in range(len(coordinates)-1)]
-    total_distance = round(sum(distances), 3)
-    estimated_time = round(total_distance / AVG_CAR_SPEED / 60, 3)
 
     return {
         "driver": {"id": id},
@@ -79,15 +75,11 @@ def transform_json(data, current_coordinates):
                 "point_a": point_coordinates[0],
                 "point_b": point_coordinates[1]
             },
-            "route_info": {
-                "total_distance": total_distance,
-                "estimated_time": estimated_time
-            }
         },
         "coordenada_actual": current_coordinates
     }
 
-geojson_path = "./model/data/car/"
+geojson_path = "./model/data/rutas/"
 geojson_list = get_geojson(geojson_path)
 
 # Crear el tema y la suscripción si es necesario
