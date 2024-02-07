@@ -31,7 +31,7 @@ try:
 except google_exceptions.Conflict:
     print(f"El conjunto de datos {dataset.dataset_id} ya existe.")
 
-# Define los esquemas de las tablas
+# Define los esquemas de las tablas con el campo 'orden'
 driver_schema = [
     bigquery.SchemaField("Id", "INTEGER", mode="REQUIRED"),
     bigquery.SchemaField("Inicio_latitud", "STRING", mode="REQUIRED"),
@@ -42,6 +42,7 @@ driver_schema = [
     bigquery.SchemaField("Tiempo_estimado", "STRING", mode="REQUIRED"),
     bigquery.SchemaField("coordenada_actual_latitud", "FLOAT", mode="REQUIRED"),
     bigquery.SchemaField("coordenada_actual_longitud", "FLOAT", mode="REQUIRED"),
+    bigquery.SchemaField("orden", "INTEGER", mode="REQUIRED"),
 ]
 
 walker_schema = [
@@ -54,6 +55,7 @@ walker_schema = [
     bigquery.SchemaField("Tiempo_estimado", "STRING", mode="REQUIRED"),
     bigquery.SchemaField("coordenada_actual_latitud", "FLOAT", mode="REQUIRED"),
     bigquery.SchemaField("coordenada_actual_longitud", "FLOAT", mode="REQUIRED"),
+    bigquery.SchemaField("orden", "INTEGER", mode="REQUIRED"),
 ]
 
 # Define el esquema de la tabla 'match'
@@ -110,81 +112,94 @@ def callback(received_message: ReceivedMessage, table: bigquery.Table, subscript
 
     # Extrae los campos del mensaje
     id = int(data["driver"]["id"]) if "driver" in data else int(data["walker"]["id"])
-    inicio_lat = data["route"]["points"]["point_a"][0]
-    inicio_lon = data["route"]["points"]["point_a"][1]
-    fin_lat = data["route"]["points"]["point_b"][0]
-    fin_lon = data["route"]["points"]["point_b"][1]
+    inicio_lat = data["route"]["points"]["point_a"][1]
+    inicio_lon = data["route"]["points"]["point_a"][0]
+    fin_lat = data["route"]["points"]["point_b"][1]
+    fin_lon = data["route"]["points"]["point_b"][0]
     distancia_total = float(data["route"]["route_info"]["total_distance"])
     tiempo_estimado = data["route"]["route_info"]["estimated_time"]
-    coordenada_actual_latitud = data["coordenada_actual"][0]
-    coordenada_actual_longitud = data["coordenada_actual"][1]
+    coordenada_actual_latitud = data["coordenada_actual"][1]
+    coordenada_actual_longitud = data["coordenada_actual"][0]
+
+    # Obtén el último valor de 'orden' y aumenta en 1
+    query = f"""
+        SELECT MAX(orden) as max_orden FROM `{project_id}.{dataset_id}.{table.table_id}`
+    """
+    query_job = client_bq.query(query)
+    for row in query_job.result():
+        max_orden = row["max_orden"]
+        break
+    orden = max_orden + 1 if max_orden else 1
 
     # Verifica si ya existe un valor para este id
     if id in last_walker_values and "walker" in data:
-        # Actualiza los valores existentes
-        last_walker_values[id] = (id, inicio_lat, inicio_lon, fin_lat, fin_lon, distancia_total, tiempo_estimado, coordenada_actual_latitud, coordenada_actual_longitud)
+        last_walker_values[id] = (id, inicio_lat, inicio_lon, fin_lat, fin_lon, distancia_total, tiempo_estimado, coordenada_actual_latitud, coordenada_actual_longitud, orden)
+        table = walker_table
     elif id in last_driver_values and "driver" in data:
-        # Actualiza los valores existentes
-        last_driver_values[id] = (id, inicio_lat, inicio_lon, fin_lat, fin_lon, distancia_total, tiempo_estimado, coordenada_actual_latitud, coordenada_actual_longitud)
+        last_driver_values[id] = (id, inicio_lat, inicio_lon, fin_lat, fin_lon, distancia_total, tiempo_estimado, coordenada_actual_latitud, coordenada_actual_longitud, orden)
+        table = driver_table
     else:
-        # Si no existe, agrega un nuevo valor
         if "walker" in data:
-            last_walker_values[id] = (id, inicio_lat, inicio_lon, fin_lat, fin_lon, distancia_total, tiempo_estimado, coordenada_actual_latitud, coordenada_actual_longitud)
+            last_walker_values[id] = (id, inicio_lat, inicio_lon, fin_lat, fin_lon, distancia_total, tiempo_estimado, coordenada_actual_latitud, coordenada_actual_longitud, orden)
+            table = walker_table
         elif "driver" in data:
-            last_driver_values[id] = (id, inicio_lat,  inicio_lon, fin_lat, fin_lon, distancia_total, tiempo_estimado, coordenada_actual_latitud, coordenada_actual_longitud)
+            last_driver_values[id] = (id, inicio_lat, inicio_lon, fin_lat, fin_lon, distancia_total, tiempo_estimado, coordenada_actual_latitud, coordenada_actual_longitud, orden)
+            table = driver_table
 
-        # Inserta los datos en BigQuery
-        rows_to_insert = [last_walker_values[id]] if "walker" in data else [last_driver_values[id]]
-        errors = client_bq.insert_rows(table, rows_to_insert)
+    rows_to_insert = [last_walker_values[id]] if "walker" in data else [last_driver_values[id]]
+    errors = client_bq.insert_rows(table, rows_to_insert)
 
-        if errors:
-            print(f"Error al insertar filas en BigQuery: {errors}")
-        else:
-            print(f"Datos insertados correctamente en {table.table_id}: {rows_to_insert}")
+    if errors:
+        print(f"Error al insertar filas en BigQuery: {errors}")
+    else:
+        print(f"Datos insertados correctamente en {table.table_id}: {rows_to_insert}")
 
-        # Marca el mensaje como procesado utilizando acknowledge
-        if table == driver_table:
-            subscriber.acknowledge(subscription=subscription_path, ack_ids=[received_message.ack_id])
-        elif table == walker_table:
-            subscriber.acknowledge(subscription=subscription_path, ack_ids=[received_message.ack_id])
+    # Marca el mensaje como procesado utilizando acknowledge
+    if table == driver_table:
+        subscriber.acknowledge(subscription=subscription_path, ack_ids=[received_message.ack_id])
+    elif table == walker_table:
+        subscriber.acknowledge(subscription=subscription_path, ack_ids=[received_message.ack_id])
 
-            # Busca coincidencias en la tabla 'driver' con distancia < 50 metros
-            query_driver = f"""
-                SELECT Id, Fin_latitud, Fin_longitud, coordenada_actual_latitud, coordenada_actual_longitud
-                FROM `{project_id}.{dataset_id}.{driver_table_id}`
-            """
-            query_job_driver = client_bq.query(query_driver)
-            results_driver = query_job_driver.result()
+        # Busca coincidencias en la tabla 'driver' con distancia < 50 metros
+        query_driver = f"""
+            SELECT Id, Fin_latitud, Fin_longitud, coordenada_actual_latitud, coordenada_actual_longitud
+            FROM `{project_id}.{dataset_id}.{driver_table_id}`
+        """
+        query_job_driver = client_bq.query(query_driver)
+        results_driver = query_job_driver.result()
 
-            for row_driver in results_driver:
-                driver_id = row_driver['Id']
-                final_driver = [row_driver['Fin_latitud'], row_driver['Fin_longitud']]
-                coordenada_driver = [row_driver['coordenada_actual_latitud'], row_driver['coordenada_actual_longitud']]
+        for row_driver in results_driver:
+            driver_id = row_driver['Id']
+            final_driver = [row_driver['Fin_latitud'], row_driver['Fin_longitud']]
+            coordenada_driver = [row_driver['coordenada_actual_latitud'], row_driver['coordenada_actual_longitud']]
 
-                # Calcula la distancia entre las coordenadas actuales
-                distance = haversine([coordenada_actual_latitud, coordenada_actual_longitud], coordenada_driver)
+            # Calcula la distancia entre las coordenadas actuales
+            distance = haversine([coordenada_actual_latitud, coordenada_actual_longitud], coordenada_driver)
 
-                if distance < 50:
-                    # Guarda la coincidencia en la tabla 'match'
+            if distance < 50:
+                # Verifica si la coincidencia ya existe en la tabla 'match'
+                query_match = f"""
+                    SELECT *
+                    FROM `{project_id}.{dataset_id}.{match_table_id}`
+                    WHERE walker_id = {id} OR driver_id = {driver_id}
+                """
+                query_job_match = client_bq.query(query_match)
+                results_match = query_job_match.result()
+
+                if not list(results_match):
+                    # No existe la coincidencia, guarda en la tabla 'match'
                     match_row = [(id, driver_id, 1.2*haversine(coordenada_driver, final_driver)/1000)]
 
-                    # Verifica que no existan duplicados en la tabla 'match'
-                    query_match = f"""
-                        SELECT *
-                        FROM `{project_id}.{dataset_id}.{match_table_id}`
-                        WHERE walker_id = {id} AND driver_id = {driver_id}
-                    """
-                    query_job_match = client_bq.query(query_match)
-                    results_match = query_job_match.result()
+                    # Inserta el registro en la tabla 'match'
+                    errors_match = client_bq.insert_rows(match_table, match_row)
 
-                    if not list(results_match):
-                        # No hay duplicados, inserta la nueva fila en 'match'
-                        errors_match = client_bq.insert_rows(match_table, match_row)
+                    if errors_match:
+                        print(f"Error al insertar filas en la tabla {match_table.table_id}: {errors_match}")
+                    else:
+                        print(f"Coincidencia registrada correctamente en {match_table.table_id}: {match_row}")
 
-                        if errors_match:
-                            print(f"Error al insertar filas en la tabla {match_table.table_id}: {errors_match}")
-                        else:
-                            print(f"Coincidencia registrada correctamente en {match_table.table_id}: {match_row}")
+    # Marca el mensaje como procesado utilizando acknowledge
+    subscriber.acknowledge(subscription=subscription_path, ack_ids=[received_message.ack_id])
 
 # Configura las suscripciones de Pub/Sub
 driver_subscription_path = f"projects/{project_id}/subscriptions/{driver_subscription_name}"
