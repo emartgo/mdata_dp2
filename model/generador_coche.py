@@ -79,7 +79,7 @@ def transform_json(data, current_coordinates):
         "coordenada_actual": current_coordinates
     }
 
-geojson_path = "./model/data/car/"
+geojson_path = "./model/data/rutas/"
 geojson_list = get_geojson(geojson_path)
 
 # Crear el tema y la suscripción si es necesario

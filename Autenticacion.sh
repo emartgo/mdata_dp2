@@ -1,4 +1,3 @@
-chmod +x ./tu_script.sh
 gcloud init
 gcloud auth login
 gcloud auth application-default login
