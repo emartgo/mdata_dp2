@@ -13,8 +13,8 @@ def create_topic_subscription():
     publisher = pubsub_v1.PublisherClient()
     subscriber = pubsub_v1.SubscriberClient()
 
-    topic_path = publisher.topic_path('awesome-ridge-411708', TOPIC_NAME)
-    subscription_path = subscriber.subscription_path('awesome-ridge-411708', SUBSCRIPTION_NAME)
+    topic_path = publisher.topic_path('titanium-gantry-411715', TOPIC_NAME)
+    subscription_path = subscriber.subscription_path('titanium-gantry-411715', SUBSCRIPTION_NAME)
 
     try:
         topic = publisher.create_topic(request={"name": topic_path})
@@ -30,7 +30,7 @@ def create_topic_subscription():
 
 def publish_message(message_data):
     publisher = pubsub_v1.PublisherClient()
-    topic_path = publisher.topic_path('awesome-ridge-411708', TOPIC_NAME)
+    topic_path = publisher.topic_path('titanium-gantry-411715', TOPIC_NAME)
 
     message_bytes = json.dumps(message_data).encode("utf-8")
 
@@ -66,7 +66,7 @@ def calculate_time(coord1, coord2, speed):
 
 def transform_json(data, current_coordinates):
 
-    id = data['walker']['id']
+    id = data['driver']['id']
     point_coordinates = [data['features'][1]['geometry']['coordinates'], data['features'][2]['geometry']['coordinates']]
     coordinates = data['features'][0]['geometry']['coordinates']
     distances = [haversine(coordinates[i], coordinates[i+1]) for i in range(len(coordinates)-1)]
@@ -88,7 +88,7 @@ def transform_json(data, current_coordinates):
         "coordenada_actual": current_coordinates
     }
 
-geojson_path = "./model/data/walker/"
+geojson_path = "./model/data/car/"
 geojson_list = get_geojson(geojson_path)
 
 # Crear el tema y la suscripción si es necesario
