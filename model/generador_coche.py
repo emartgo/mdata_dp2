@@ -13,8 +13,8 @@ def create_topic_subscription():
     publisher = pubsub_v1.PublisherClient()
     subscriber = pubsub_v1.SubscriberClient()
 
-    topic_path = publisher.topic_path('awesome-ridge-411708', TOPIC_NAME)
-    subscription_path = subscriber.subscription_path('awesome-ridge-411708', SUBSCRIPTION_NAME)
+    topic_path = publisher.topic_path('titanium-gantry-411715', TOPIC_NAME)
+    subscription_path = subscriber.subscription_path('titanium-gantry-411715', SUBSCRIPTION_NAME)
 
     try:
         topic = publisher.create_topic(request={"name": topic_path})
@@ -30,7 +30,7 @@ def create_topic_subscription():
 
 def publish_message(message_data):
     publisher = pubsub_v1.PublisherClient()
-    topic_path = publisher.topic_path('awesome-ridge-411708', TOPIC_NAME)
+    topic_path = publisher.topic_path('titanium-gantry-411715', TOPIC_NAME)
 
     message_bytes = json.dumps(message_data).encode("utf-8")
 
