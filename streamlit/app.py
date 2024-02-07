@@ -70,7 +70,7 @@ while True:
     # Create a map with Plotly Express
     fig = px.scatter_mapbox(df_combined, lat="latitud", lon="longitud",
                             color="Tipo",  # Use the 'Tipo' column to differentiate the points
-                            zoom=3, height=600,
+                            zoom=11, height=600,
                             mapbox_style="open-street-map")
 
     # Update the map container in Streamlit with the new chart
