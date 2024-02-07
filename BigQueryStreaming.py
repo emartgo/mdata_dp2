@@ -38,8 +38,6 @@ driver_schema = [
     bigquery.SchemaField("Inicio_longitud", "STRING", mode="REQUIRED"),
     bigquery.SchemaField("Fin_latitud", "STRING", mode="REQUIRED"),
     bigquery.SchemaField("Fin_longitud", "STRING", mode="REQUIRED"),
-    bigquery.SchemaField("Distancia_total", "FLOAT", mode="REQUIRED"),
-    bigquery.SchemaField("Tiempo_estimado", "STRING", mode="REQUIRED"),
     bigquery.SchemaField("coordenada_actual_latitud", "FLOAT", mode="REQUIRED"),
     bigquery.SchemaField("coordenada_actual_longitud", "FLOAT", mode="REQUIRED"),
     bigquery.SchemaField("orden", "INTEGER", mode="REQUIRED"),
@@ -51,8 +49,6 @@ walker_schema = [
     bigquery.SchemaField("Inicio_longitud", "STRING", mode="REQUIRED"),
     bigquery.SchemaField("Fin_latitud", "STRING", mode="REQUIRED"),
     bigquery.SchemaField("Fin_longitud", "STRING", mode="REQUIRED"),
-    bigquery.SchemaField("Distancia_total", "FLOAT", mode="REQUIRED"),
-    bigquery.SchemaField("Tiempo_estimado", "STRING", mode="REQUIRED"),
     bigquery.SchemaField("coordenada_actual_latitud", "FLOAT", mode="REQUIRED"),
     bigquery.SchemaField("coordenada_actual_longitud", "FLOAT", mode="REQUIRED"),
     bigquery.SchemaField("orden", "INTEGER", mode="REQUIRED"),
@@ -116,8 +112,6 @@ def callback(received_message: ReceivedMessage, table: bigquery.Table, subscript
     inicio_lon = data["route"]["points"]["point_a"][0]
     fin_lat = data["route"]["points"]["point_b"][1]
     fin_lon = data["route"]["points"]["point_b"][0]
-    distancia_total = float(data["route"]["route_info"]["total_distance"])
-    tiempo_estimado = data["route"]["route_info"]["estimated_time"]
     coordenada_actual_latitud = data["coordenada_actual"][1]
     coordenada_actual_longitud = data["coordenada_actual"][0]
 
@@ -133,17 +127,17 @@ def callback(received_message: ReceivedMessage, table: bigquery.Table, subscript
 
     # Verifica si ya existe un valor para este id
     if id in last_walker_values and "walker" in data:
-        last_walker_values[id] = (id, inicio_lat, inicio_lon, fin_lat, fin_lon, distancia_total, tiempo_estimado, coordenada_actual_latitud, coordenada_actual_longitud, orden)
+        last_walker_values[id] = (id, inicio_lat, inicio_lon, fin_lat, fin_lon, coordenada_actual_latitud, coordenada_actual_longitud, orden)
         table = walker_table
     elif id in last_driver_values and "driver" in data:
-        last_driver_values[id] = (id, inicio_lat, inicio_lon, fin_lat, fin_lon, distancia_total, tiempo_estimado, coordenada_actual_latitud, coordenada_actual_longitud, orden)
+        last_driver_values[id] = (id, inicio_lat, inicio_lon, fin_lat, fin_lon, coordenada_actual_latitud, coordenada_actual_longitud, orden)
         table = driver_table
     else:
         if "walker" in data:
-            last_walker_values[id] = (id, inicio_lat, inicio_lon, fin_lat, fin_lon, distancia_total, tiempo_estimado, coordenada_actual_latitud, coordenada_actual_longitud, orden)
+            last_walker_values[id] = (id, inicio_lat, inicio_lon, fin_lat, fin_lon, coordenada_actual_latitud, coordenada_actual_longitud, orden)
             table = walker_table
         elif "driver" in data:
-            last_driver_values[id] = (id, inicio_lat, inicio_lon, fin_lat, fin_lon, distancia_total, tiempo_estimado, coordenada_actual_latitud, coordenada_actual_longitud, orden)
+            last_driver_values[id] = (id, inicio_lat, inicio_lon, fin_lat, fin_lon, coordenada_actual_latitud, coordenada_actual_longitud, orden)
             table = driver_table
 
     rows_to_insert = [last_walker_values[id]] if "walker" in data else [last_driver_values[id]]
